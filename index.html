@@ -136,7 +136,7 @@
                 No messages yet. Start the conversation!
               </div>
               <div v-for="(msg, i) in getMessages(selectedProfile.id)" :key="i" class="bg-white p-2 rounded-lg border border-slate-100 shadow-sm">
-                <div class="flex justify-between text-[10px] font-bold text-indigo-600 mb-0.5">
+                <div class="flex justify-between text-[10px] font-bold mb-0.5" :class="msg.sender === selectedProfile.name ? 'text-green-600' : 'text-indigo-600'">
                   <span>👤 {{ msg.sender || 'Anonymous' }}</span>
                   <span class="text-slate-400 font-normal">{{ msg.time }}</span>
                 </div>
@@ -144,10 +144,21 @@
               </div>
             </div>
 
+            <!-- Your Name Input - Shows when viewing a profile -->
+            <div class="mb-2">
+              <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Your Name (for chat)</label>
+              <input 
+                type="text" 
+                v-model="visitorName"
+                placeholder="Enter your name..."
+                class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+
             <div class="flex gap-2">
               <input 
                 type="text" 
-                placeholder="Type a message... (visible to everyone)" 
+                placeholder="Type a message..." 
                 v-model="chatInput"
                 @keyup.enter="sendMessage(selectedProfile.id)"
                 class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -160,7 +171,11 @@
                 {{ isSendingMessage ? '...' : 'Send' }}
               </button>
             </div>
-            <p class="text-[10px] text-slate-400 mt-1">💡 Messages are saved globally and visible to everyone</p>
+            <p class="text-[10px] text-slate-400 mt-1">
+              💡 Messages are saved globally. 
+              <span v-if="visitorName" class="text-green-600 font-medium">You're chatting as: {{ visitorName }}</span>
+              <span v-else class="text-amber-600">Please enter your name above</span>
+            </p>
           </div>
         </div>
 
@@ -251,10 +266,10 @@
     const { createApp, ref, computed, onMounted, nextTick } = Vue;
 
     // ============================================================
-    // YOUR NEW JSONBIN CREDENTIALS
+    // YOUR JSONBIN CREDENTIALS
     // ============================================================
-    const BIN_ID = '6a4e1171da38895dfe3f5885';     // ← NEW BIN ID
-    const API_KEY = '$2a$10$9H5oG80cnlBePFC2af5G5edtOsIn6o2YDVdFws9VDqImy8Vnuf4PO';  // ← Same API Key
+    const BIN_ID = '6a4e1171da38895dfe3f5885';
+    const API_KEY = '$2a$10$9H5oG80cnlBePFC2af5G5edtOsIn6o2YDVdFws9VDqImy8Vnuf4PO';
 
     const API_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
     // ============================================================
@@ -264,6 +279,7 @@
         const searchQuery = ref('');
         const selectedProfile = ref(null);
         const chatInput = ref('');
+        const visitorName = ref('');
         const isLoading = ref(true);
         const isSubmitting = ref(false);
         const isSendingMessage = ref(false);
@@ -286,14 +302,12 @@
           );
         });
 
-        // ---------- LOAD DATA FROM JSONBIN ----------
+        // ---------- LOAD DATA ----------
         async function loadAllData() {
           isLoading.value = true;
           errorMessage.value = '';
           
           try {
-            console.log('📡 Fetching from new bin:', BIN_ID);
-            
             const response = await fetch(`${API_URL}/latest`, {
               headers: { 
                 'X-Master-Key': API_KEY,
@@ -307,7 +321,6 @@
             }
             
             const data = await response.json();
-            console.log('✅ Data loaded from new bin:', data);
             
             if (data.record) {
               if (data.record.profiles) {
@@ -338,15 +351,13 @@
           }
         }
 
-        // ---------- SAVE DATA TO JSONBIN ----------
+        // ---------- SAVE DATA ----------
         async function saveAllData() {
           try {
             const dataToSave = {
               profiles: profiles.value,
               messages: messages.value
             };
-            
-            console.log('💾 Saving to new bin:', dataToSave);
             
             const response = await fetch(API_URL, {
               method: 'PUT',
@@ -362,7 +373,6 @@
               throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             
-            console.log('✅ Data saved to new bin successfully');
           } catch (error) {
             console.error('❌ Error saving data:', error);
             throw error;
@@ -419,19 +429,17 @@
           }
         };
 
-        // ---------- START EDITING ----------
+        // ---------- EDIT FUNCTIONS ----------
         const startEditing = (profile) => {
           editingProfile.value = { ...profile };
           isEditing.value = true;
         };
 
-        // ---------- CANCEL EDITING ----------
         const cancelEditing = () => {
           isEditing.value = false;
           editingProfile.value = null;
         };
 
-        // ---------- UPDATE PORTFOLIO ----------
         const updatePortfolio = async () => {
           if (!editingProfile.value.name.trim() || !editingProfile.value.title.trim()) {
             alert('Please fill in Name and Headline fields.');
@@ -464,10 +472,13 @@
             .sort((a, b) => a.timestamp - b.timestamp);
         };
 
-        // ---------- SEND MESSAGE ----------
+        // ---------- SEND MESSAGE WITH VISITOR NAME ----------
         const sendMessage = async (profileId) => {
           if (!chatInput.value.trim()) return;
           if (isSendingMessage.value) return;
+
+          // Use visitor name or fallback to "Anonymous"
+          const senderName = visitorName.value.trim() || 'Anonymous';
 
           isSendingMessage.value = true;
 
@@ -480,7 +491,7 @@
             text: chatInput.value.trim(),
             time: timeString,
             timestamp: timestamp,
-            sender: 'Anonymous Visitor'
+            sender: senderName  // ← Now using the visitor's name!
           };
 
           try {
@@ -525,6 +536,7 @@
           filteredProfiles,
           form,
           chatInput,
+          visitorName,
           isLoading,
           isSubmitting,
           isSendingMessage,
