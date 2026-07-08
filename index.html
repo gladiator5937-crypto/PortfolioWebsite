@@ -31,7 +31,7 @@
             <input
               type="text"
               class="w-full pl-4 pr-16 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
-              placeholder="Search by name, job titles, tags ('Figma', 'React')..."
+              placeholder="Search by name, job titles, tags..."
               v-model="searchQuery"
             />
             <button 
@@ -45,16 +45,28 @@
         </div>
 
         <div class="space-y-4">
+          <!-- Loading State -->
           <div v-if="isLoading" class="text-center py-12 bg-white rounded-2xl border border-slate-200">
             <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-600 border-t-transparent"></div>
             <p class="mt-2 text-sm font-medium text-slate-600">Loading portfolios...</p>
           </div>
 
+          <!-- Error State -->
+          <div v-else-if="errorMessage" class="text-center py-12 bg-red-50 rounded-2xl border border-red-200">
+            <span class="text-3xl">⚠️</span>
+            <p class="mt-2 text-sm font-medium text-red-600">{{ errorMessage }}</p>
+            <button @click="loadProfiles" class="mt-3 text-xs bg-red-100 hover:bg-red-200 text-red-700 px-4 py-2 rounded-lg font-medium transition-colors">
+              Retry
+            </button>
+          </div>
+
+          <!-- No Results -->
           <div v-else-if="filteredProfiles.length === 0" class="text-center py-12 bg-white rounded-2xl border border-slate-200 border-dashed">
             <span class="text-3xl">🔍</span>
             <p class="mt-2 text-sm font-medium text-slate-600">No matching talent found.</p>
           </div>
 
+          <!-- Profile Cards -->
           <div 
             v-for="profile in filteredProfiles" 
             :key="profile.id"
@@ -194,11 +206,10 @@
     const { createApp, ref, computed, onMounted } = Vue;
 
     // ============================================================
-    // 1. REPLACE THESE WITH YOUR JSONBIN.IO CREDENTIALS
-    //    Go to https://jsonbin.io → Create a bin with [] → Get keys
+    // YOUR JSONBIN CREDENTIALS (Already Added)
     // ============================================================
-    const BIN_ID = '6a4e07a1da38895dfe3f2c12';        // e.g., "67890abcdef123456"
-    const API_KEY = '$2a$10$9H5oG80cnlBePFC2af5G5edtOsIn6o2YDVdFws9VDqImy8Vnuf4PO';     // e.g., "$2a$10$abcdefghijklmnopqrstuv"
+    const BIN_ID = '6a4e07a1da38895dfe3f2c12';
+    const API_KEY = '$2a$10$9H5oG80cnlBePFC2af5G5edtOsIn6o2YDVdFws9VDqImy8Vnuf4PO';
 
     const API_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
     // ============================================================
@@ -210,6 +221,7 @@
         const chatInput = ref('');
         const isLoading = ref(true);
         const isSubmitting = ref(false);
+        const errorMessage = ref('');
 
         const profiles = ref([]);
         const messages = ref([]);
@@ -228,18 +240,46 @@
         // ---------- LOAD PROFILES FROM JSONBIN ----------
         async function loadProfiles() {
           isLoading.value = true;
+          errorMessage.value = '';
+          
           try {
+            console.log('📡 Fetching from:', API_URL);
+            
             const response = await fetch(`${API_URL}/latest`, {
-              headers: { 'X-Master-Key': API_KEY }
+              headers: { 
+                'X-Master-Key': API_KEY,
+                'Content-Type': 'application/json'
+              }
             });
             
-            if (!response.ok) throw new Error('Failed to load profiles');
+            console.log('📡 Response status:', response.status);
+            
+            if (!response.ok) {
+              const errorText = await response.text();
+              console.error('❌ Error response:', errorText);
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
             
             const data = await response.json();
-            profiles.value = data.record || [];
+            console.log('✅ Data received:', data);
+            
+            // Handle different response formats
+            if (data.record && Array.isArray(data.record)) {
+              profiles.value = data.record;
+            } else if (Array.isArray(data)) {
+              profiles.value = data;
+            } else {
+              profiles.value = [];
+              console.warn('⚠️ Unexpected data format:', data);
+            }
+            
+            if (profiles.value.length === 0) {
+              console.log('ℹ️ No profiles found. Add some!');
+            }
+            
           } catch (error) {
-            console.error('Error loading profiles:', error);
-            alert('Failed to load portfolios. Please refresh the page.');
+            console.error('❌ Error loading profiles:', error);
+            errorMessage.value = `Failed to load: ${error.message}`;
             profiles.value = [];
           } finally {
             isLoading.value = false;
@@ -249,6 +289,8 @@
         // ---------- SAVE PROFILES TO JSONBIN ----------
         async function saveProfiles() {
           try {
+            console.log('💾 Saving profiles:', profiles.value);
+            
             const response = await fetch(API_URL, {
               method: 'PUT',
               headers: {
@@ -258,9 +300,15 @@
               body: JSON.stringify(profiles.value)
             });
             
-            if (!response.ok) throw new Error('Failed to save profiles');
+            if (!response.ok) {
+              const errorText = await response.text();
+              console.error('❌ Save error:', errorText);
+              throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            }
+            
+            console.log('✅ Profiles saved successfully');
           } catch (error) {
-            console.error('Error saving profiles:', error);
+            console.error('❌ Error saving profiles:', error);
             throw error;
           }
         }
@@ -273,6 +321,7 @@
           }
 
           isSubmitting.value = true;
+          errorMessage.value = '';
 
           const newProfile = {
             id: Date.now().toString().slice(-6),
@@ -294,6 +343,7 @@
           } catch (error) {
             // Rollback if save fails
             profiles.value = profiles.value.filter(p => p.id !== newProfile.id);
+            errorMessage.value = `Failed to save: ${error.message}`;
             alert('❌ Failed to publish profile. Please try again.');
           } finally {
             isSubmitting.value = false;
@@ -308,8 +358,8 @@
             profiles.value = profiles.value.filter(p => p.id !== id);
             await saveProfiles();
             selectedProfile.value = null;
+            alert('✅ Profile deleted successfully!');
           } catch (error) {
-            // Rollback if save fails
             await loadProfiles();
             alert('❌ Failed to delete profile. Please try again.');
           }
@@ -349,6 +399,8 @@
           chatInput,
           isLoading,
           isSubmitting,
+          errorMessage,
+          loadProfiles,
           handleCreatePortfolio,
           deletePortfolio,
           getMessages,
