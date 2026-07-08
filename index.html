@@ -6,23 +6,34 @@
   <title>PortfoliOasis - Portfolio Search & Chat Directory</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <style>
+    /* Dropdown animation */
+    .dropdown-enter-active, .dropdown-leave-active {
+      transition: all 0.2s ease;
+    }
+    .dropdown-enter-from, .dropdown-leave-to {
+      opacity: 0;
+      transform: scale(0.95) translateY(-10px);
+    }
+    .dropdown-enter-to, .dropdown-leave-from {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  </style>
 </head>
 <body class="bg-slate-50 text-slate-900 font-sans antialiased">
 
   <div id="app">
-    <!-- Header -->
+    <!-- Header with 3-Dot Menu -->
     <header class="bg-white border-b border-slate-200 sticky top-0 z-20 px-6 py-4 shadow-sm">
       <div class="max-w-6xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
         <div class="flex items-center gap-3">
           <h1 class="text-xl font-extrabold text-indigo-600 tracking-tight">PortfoliOasis</h1>
           <span class="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full">{{ profiles.length }} profiles</span>
+          <span v-if="isDev" class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">⚡ DEV</span>
         </div>
         <div class="flex items-center gap-3">
-          <!-- Developer Mode Toggle -->
-          <button @click="showDevModal = true" class="text-xs text-slate-400 hover:text-indigo-600 transition-colors">
-            ⚙️ Dev
-          </button>
-          <!-- Login/User Info -->
+          <!-- User Info / Login -->
           <div v-if="currentUser" class="flex items-center gap-2">
             <span class="text-sm font-medium text-slate-700">{{ currentUser.name }}</span>
             <button @click="logout" class="text-xs text-red-500 hover:text-red-700">Logout</button>
@@ -30,13 +41,58 @@
           <button v-else @click="showLoginModal = true" class="text-sm bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-1.5 rounded-lg font-medium transition-colors">
             Login
           </button>
+          
+          <!-- 3-DOT MENU -->
+          <div class="relative" @mouseenter="showDropdown = true" @mouseleave="showDropdown = false">
+            <button class="w-8 h-8 rounded-full hover:bg-slate-100 transition-colors flex items-center justify-center text-slate-500 hover:text-slate-700">
+              <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+              </svg>
+            </button>
+            
+            <!-- Dropdown Popup Card -->
+            <div v-show="showDropdown" class="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-200 overflow-hidden z-30 transition-all origin-top-right">
+              <div class="py-1">
+                <!-- User Status -->
+                <div class="px-4 py-2 border-b border-slate-100">
+                  <p class="text-xs font-medium text-slate-500">Account</p>
+                  <p class="text-sm font-semibold text-slate-800" v-if="currentUser">{{ currentUser.name }}</p>
+                  <p class="text-sm text-slate-400" v-else>Not logged in</p>
+                </div>
+                
+                <!-- Developer Mode Option -->
+                <button @click="showDevModal = true" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 transition-colors flex items-center gap-3 text-slate-700">
+                  <span class="text-lg">⚙️</span>
+                  <span>Developer Mode</span>
+                  <span v-if="isDev" class="ml-auto text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">ACTIVE</span>
+                </button>
+                
+                <!-- Login/Logout Option -->
+                <button v-if="!currentUser" @click="showLoginModal = true" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 transition-colors flex items-center gap-3 text-slate-700">
+                  <span class="text-lg">🔐</span>
+                  <span>Login</span>
+                </button>
+                <button v-else @click="logout" class="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 transition-colors flex items-center gap-3 text-red-600">
+                  <span class="text-lg">🚪</span>
+                  <span>Logout</span>
+                </button>
+                
+                <!-- Stats -->
+                <div class="border-t border-slate-100 px-4 py-2 text-[10px] text-slate-400">
+                  <span>Total Profiles: {{ profiles.length }}</span>
+                  <span class="mx-2">•</span>
+                  <span>Messages: {{ messages.length }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </header>
 
     <main class="max-w-6xl mx-auto p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
       
-      <!-- LEFT COLUMN - Search & Profiles -->
+      <!-- LEFT COLUMN -->
       <div class="lg:col-span-2 space-y-6">
         <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-3">
           <h2 class="text-base font-bold text-slate-800">Search Discovery Engine</h2>
@@ -84,8 +140,7 @@
                      selectedProfile && selectedProfile.id === profile.id ? 'border-indigo-500 ring-2 ring-indigo-500/10' : 'border-slate-200 hover:border-slate-300']"
           >
             <div class="w-14 h-14 rounded-xl bg-slate-100 flex items-center justify-center text-3xl shrink-0 overflow-hidden">
-              <img v-if="profile.pfp" :src="profile.pfp" class="w-full h-full object-cover rounded-xl" />
-              <span v-else>{{ profile.avatar || '🚀' }}</span>
+              <span v-if="!profile.pfp">{{ profile.avatar || '🚀' }}</span>
             </div>
             <div class="space-y-2 w-full">
               <div class="flex justify-between items-start">
@@ -96,6 +151,7 @@
                 <div class="flex items-center gap-2">
                   <span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-md font-mono">ID: {{ profile.id }}</span>
                   <span v-if="profile.owner" class="text-[10px] bg-green-50 text-green-600 px-1.5 py-0.5 rounded">🔒</span>
+                  <span v-if="isDev" class="text-[10px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded">⚡</span>
                 </div>
               </div>
               <p class="text-xs text-slate-600 line-clamp-2">{{ profile.bio }}</p>
@@ -118,19 +174,17 @@
           <div class="flex justify-between items-start">
             <div class="flex gap-3 items-center">
               <div class="w-14 h-14 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-3xl overflow-hidden">
-                <img v-if="selectedProfile.pfp" :src="selectedProfile.pfp" class="w-full h-full object-cover rounded-xl" />
-                <span v-else>{{ selectedProfile.avatar || '🚀' }}</span>
+                <span>{{ selectedProfile.avatar || '🚀' }}</span>
               </div>
               <div>
                 <h2 class="text-base font-black text-slate-900">{{ selectedProfile.name }}</h2>
                 <p class="text-xs font-bold text-indigo-600">{{ selectedProfile.title }}</p>
+                <p class="text-[10px] text-slate-400" v-if="selectedProfile.owner">👤 {{ selectedProfile.owner }}</p>
               </div>
             </div>
             
             <div class="flex gap-2">
-              <!-- Edit: Only owner or dev -->
               <button v-if="canEdit(selectedProfile)" @click="startEditing(selectedProfile)" class="text-xs text-blue-500 hover:text-white hover:bg-blue-500 bg-blue-50 border border-blue-200 px-2 py-1 rounded-md transition-colors">✏️ Edit</button>
-              <!-- Delete: Only owner or dev -->
               <button v-if="canDelete(selectedProfile)" @click="deletePortfolio(selectedProfile.id)" class="text-xs text-red-500 hover:text-white hover:bg-red-500 bg-red-50 border border-red-200 px-2 py-1 rounded-md transition-colors">Delete</button>
               <button @click="selectedProfile = null" class="text-xs text-slate-400 hover:text-slate-600 bg-slate-50 hover:bg-slate-100 px-2 py-1 rounded-md transition-colors">Close</button>
             </div>
@@ -219,7 +273,7 @@
             </div>
 
             <div>
-              <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Profile Picture (Emoji)</label>
+              <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Profile Picture</label>
               <div class="flex gap-2 flex-wrap">
                 <button v-for="emoji in avatars" :key="emoji" @click="editingProfile.avatar = emoji" type="button" 
                   :class="['w-8 h-8 rounded-lg text-xl transition-all', editingProfile.avatar === emoji ? 'bg-indigo-100 ring-2 ring-indigo-500' : 'bg-slate-50 hover:bg-slate-100']">
@@ -271,7 +325,7 @@
             </div>
 
             <div>
-              <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Profile Picture (Emoji)</label>
+              <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Profile Picture</label>
               <div class="flex gap-2 flex-wrap">
                 <button v-for="emoji in avatars" :key="emoji" @click="form.avatar = emoji" type="button" :disabled="!currentUser"
                   :class="['w-8 h-8 rounded-lg text-xl transition-all', form.avatar === emoji ? 'bg-indigo-100 ring-2 ring-indigo-500' : 'bg-slate-50 hover:bg-slate-100', !currentUser ? 'opacity-50 cursor-not-allowed' : '']">
@@ -297,7 +351,7 @@
     </main>
 
     <!-- LOGIN MODAL -->
-    <div v-if="showLoginModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div v-if="showLoginModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="showLoginModal = false">
       <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
         <h2 class="text-xl font-bold text-slate-900">🔐 Login</h2>
         <p class="text-xs text-slate-500">Enter your credentials to manage your portfolio</p>
@@ -324,7 +378,7 @@
     </div>
 
     <!-- DEVELOPER MODAL -->
-    <div v-if="showDevModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div v-if="showDevModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="showDevModal = false">
       <div class="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
         <h2 class="text-xl font-bold text-slate-900">⚙️ Developer Mode</h2>
         <p class="text-xs text-slate-500">Enter the developer code to unlock admin privileges</p>
@@ -348,7 +402,7 @@
   </div>
 
   <script>
-    const { createApp, ref, computed, onMounted, nextTick, watch } = Vue;
+    const { createApp, ref, computed, onMounted, nextTick } = Vue;
 
     // ============================================================
     // YOUR JSONBIN CREDENTIALS
@@ -378,6 +432,7 @@
         const chatContainer = ref(null);
         const isEditing = ref(false);
         const editingProfile = ref(null);
+        const showDropdown = ref(false);
 
         // Auth
         const currentUser = ref(null);
@@ -465,7 +520,6 @@
               return;
             }
 
-            // Login
             if (!users[loginEmail.value] || users[loginEmail.value].password !== loginPassword.value) {
               alert('❌ Invalid email or password');
               return;
@@ -499,8 +553,7 @@
           if (devCode.value === DEV_SECRET_CODE) {
             isDev.value = true;
             devStatus.value = '✅ Developer mode activated!';
-            showDevModal.value = false;
-            devCode.value = '';
+            setTimeout(() => { showDevModal.value = false; devCode.value = ''; }, 1000);
             alert('🔓 Developer mode activated! You can now edit/delete any profile.');
           } else {
             devStatus.value = '❌ Invalid developer code';
@@ -585,7 +638,6 @@
             return;
           }
 
-          // Check if user already has a portfolio
           const existing = profiles.value.find(p => p.owner === currentUser.value.email);
           if (existing) {
             alert('You already have a portfolio! You can edit it instead.');
@@ -603,7 +655,7 @@
             email: form.value.email.trim() || '',
             whatsapp: form.value.whatsapp.trim() || '',
             instagram: form.value.instagram.trim() || '',
-            owner: currentUser.value.email,  // ← Track who owns this profile
+            owner: currentUser.value.email,
             createdAt: new Date().toISOString()
           };
 
@@ -626,10 +678,167 @@
           const profile = profiles.value.find(p => p.id === id);
           if (!profile) return;
 
-          // Check permissions
           if (!canDelete(profile)) {
             alert('❌ You can only delete your own portfolio!');
             return;
           }
 
-         
+          if (!confirm(`Are you sure you want to delete "${profile.name}"'s portfolio?`)) return;
+
+          try {
+            messages.value = messages.value.filter(m => m.profileId !== id);
+            profiles.value = profiles.value.filter(p => p.id !== id);
+            await saveAllData();
+            selectedProfile.value = null;
+            alert('✅ Portfolio deleted successfully!');
+          } catch (error) {
+            await loadAllData();
+            alert('❌ Failed to delete portfolio. Please try again.');
+          }
+        };
+
+        // ---------- EDIT FUNCTIONS ----------
+        const startEditing = (profile) => {
+          editingProfile.value = { ...profile };
+          isEditing.value = true;
+        };
+
+        const cancelEditing = () => {
+          isEditing.value = false;
+          editingProfile.value = null;
+        };
+
+        const updatePortfolio = async () => {
+          if (!editingProfile.value.name.trim() || !editingProfile.value.title.trim()) {
+            alert('Please fill in Name and Headline fields.');
+            return;
+          }
+
+          isSubmitting.value = true;
+
+          try {
+            const index = profiles.value.findIndex(p => p.id === editingProfile.value.id);
+            if (index !== -1) {
+              editingProfile.value.bio = filterProfanity(editingProfile.value.bio);
+              profiles.value[index] = { ...editingProfile.value };
+              await saveAllData();
+              selectedProfile.value = { ...editingProfile.value };
+              alert('✅ Profile updated successfully!');
+              isEditing.value = false;
+              editingProfile.value = null;
+            }
+          } catch (error) {
+            alert('❌ Failed to update profile. Please try again.');
+          } finally {
+            isSubmitting.value = false;
+          }
+        };
+
+        // ---------- MESSAGES ----------
+        const getMessages = (profileId) => {
+          return messages.value
+            .filter(m => m.profileId === profileId)
+            .sort((a, b) => a.timestamp - b.timestamp);
+        };
+
+        const sendMessage = async (profileId) => {
+          if (!chatInput.value.trim()) return;
+          if (isSendingMessage.value) return;
+
+          const senderName = visitorName.value.trim() || 'Anonymous';
+          const filteredText = filterProfanity(chatInput.value.trim());
+
+          isSendingMessage.value = true;
+
+          const now = new Date();
+          const timestamp = now.getTime();
+          const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+          const newMessage = {
+            profileId: profileId,
+            text: filteredText,
+            time: timeString,
+            timestamp: timestamp,
+            sender: senderName
+          };
+
+          try {
+            messages.value.push(newMessage);
+            await saveAllData();
+            chatInput.value = '';
+            
+            await nextTick();
+            if (chatContainer.value) {
+              chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+            }
+          } catch (error) {
+            messages.value = messages.value.filter(m => m.timestamp !== timestamp);
+            alert('❌ Failed to send message. Please try again.');
+          } finally {
+            isSendingMessage.value = false;
+          }
+        };
+
+        // ---------- AUTO-REFRESH ----------
+        let refreshInterval = null;
+
+        const startAutoRefresh = () => {
+          if (refreshInterval) clearInterval(refreshInterval);
+          refreshInterval = setInterval(() => {
+            if (selectedProfile.value) {
+              loadAllData();
+            }
+          }, 10000);
+        };
+
+        // ---------- LOAD ON MOUNT ----------
+        onMounted(() => {
+          loadAllData();
+          startAutoRefresh();
+        });
+
+        return {
+          profiles,
+          searchQuery,
+          selectedProfile,
+          filteredProfiles,
+          form,
+          chatInput,
+          visitorName,
+          isLoading,
+          isSubmitting,
+          isSendingMessage,
+          errorMessage,
+          chatContainer,
+          isEditing,
+          editingProfile,
+          showDropdown,
+          currentUser,
+          showLoginModal,
+          showDevModal,
+          loginEmail,
+          loginPassword,
+          isSignup,
+          devCode,
+          devStatus,
+          isDev,
+          avatars,
+          loadAllData,
+          handleCreatePortfolio,
+          deletePortfolio,
+          startEditing,
+          cancelEditing,
+          updatePortfolio,
+          getMessages,
+          sendMessage,
+          login,
+          logout,
+          activateDev,
+          canEdit,
+          canDelete
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
