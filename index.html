@@ -31,7 +31,7 @@
             <input
               type="text"
               class="w-full pl-4 pr-16 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm transition-all"
-              placeholder="Search by name, job titles, tags..."
+              placeholder="Search by name, job titles..."
               v-model="searchQuery"
             />
             <button 
@@ -45,28 +45,24 @@
         </div>
 
         <div class="space-y-4">
-          <!-- Loading State -->
           <div v-if="isLoading" class="text-center py-12 bg-white rounded-2xl border border-slate-200">
             <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-indigo-600 border-t-transparent"></div>
             <p class="mt-2 text-sm font-medium text-slate-600">Loading portfolios...</p>
           </div>
 
-          <!-- Error State -->
           <div v-else-if="errorMessage" class="text-center py-12 bg-red-50 rounded-2xl border border-red-200">
             <span class="text-3xl">⚠️</span>
             <p class="mt-2 text-sm font-medium text-red-600">{{ errorMessage }}</p>
-            <button @click="loadProfiles" class="mt-3 text-xs bg-red-100 hover:bg-red-200 text-red-700 px-4 py-2 rounded-lg font-medium transition-colors">
+            <button @click="loadAllData" class="mt-3 text-xs bg-red-100 hover:bg-red-200 text-red-700 px-4 py-2 rounded-lg font-medium transition-colors">
               Retry
             </button>
           </div>
 
-          <!-- No Results -->
           <div v-else-if="filteredProfiles.length === 0" class="text-center py-12 bg-white rounded-2xl border border-slate-200 border-dashed">
             <span class="text-3xl">🔍</span>
             <p class="mt-2 text-sm font-medium text-slate-600">No matching talent found.</p>
           </div>
 
-          <!-- Profile Cards -->
           <div 
             v-for="profile in filteredProfiles" 
             :key="profile.id"
@@ -99,7 +95,7 @@
 
       <div class="space-y-6">
         
-        <div v-if="selectedProfile" class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 space-y-6 sticky top-24">
+        <div v-if="selectedProfile && !isEditing" class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 space-y-6 sticky top-24">
           <div class="flex justify-between items-start">
             <div class="flex gap-3 items-center">
               <div class="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-2xl">
@@ -112,6 +108,7 @@
             </div>
             
             <div class="flex gap-2">
+              <button @click="startEditing(selectedProfile)" class="text-xs text-blue-500 hover:text-white hover:bg-blue-500 bg-blue-50 border border-blue-200 px-2 py-1 rounded-md transition-colors">✏️ Edit</button>
               <button @click="deletePortfolio(selectedProfile.id)" class="text-xs text-red-500 hover:text-white hover:bg-red-500 bg-red-50 border border-red-200 px-2 py-1 rounded-md transition-colors">Delete</button>
               <button @click="selectedProfile = null" class="text-xs text-slate-400 hover:text-slate-600 bg-slate-50 hover:bg-slate-100 px-2 py-1 rounded-md transition-colors">Close</button>
             </div>
@@ -129,15 +126,18 @@
           </div>
 
           <div class="border-t border-slate-100 pt-4">
-            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">📬 Live Chat (Direct on Website)</h4>
+            <div class="flex justify-between items-center mb-2">
+              <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider">💬 Global Live Chat</h4>
+              <span class="text-[10px] text-slate-400">{{ getMessages(selectedProfile.id).length }} messages</span>
+            </div>
             
-            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 h-40 overflow-y-auto space-y-2 mb-2 text-xs">
+            <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 h-48 overflow-y-auto space-y-2 mb-2 text-xs" ref="chatContainer">
               <div v-if="!getMessages(selectedProfile.id).length" class="text-slate-400 text-center py-8 italic">
-                No messages yet. Start the conversation below!
+                No messages yet. Start the conversation!
               </div>
               <div v-for="(msg, i) in getMessages(selectedProfile.id)" :key="i" class="bg-white p-2 rounded-lg border border-slate-100 shadow-sm">
                 <div class="flex justify-between text-[10px] font-bold text-indigo-600 mb-0.5">
-                  <span>From: Anonymous Visitor</span>
+                  <span>👤 {{ msg.sender || 'Anonymous' }}</span>
                   <span class="text-slate-400 font-normal">{{ msg.time }}</span>
                 </div>
                 <p class="text-slate-700 font-medium">{{ msg.text }}</p>
@@ -147,21 +147,66 @@
             <div class="flex gap-2">
               <input 
                 type="text" 
-                placeholder="Type a direct message..." 
+                placeholder="Type a message... (visible to everyone)" 
                 v-model="chatInput"
                 @keyup.enter="sendMessage(selectedProfile.id)"
                 class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
               <button 
                 @click="sendMessage(selectedProfile.id)"
-                class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                :disabled="isSendingMessage"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-colors disabled:opacity-50"
               >
-                Send
+                {{ isSendingMessage ? '...' : 'Send' }}
               </button>
             </div>
+            <p class="text-[10px] text-slate-400 mt-1">💡 Messages are saved globally and visible to everyone</p>
           </div>
         </div>
 
+        <!-- Edit Form -->
+        <div v-else-if="isEditing && editingProfile" class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 space-y-4 sticky top-24">
+          <div class="flex justify-between items-center">
+            <h2 class="text-base font-black text-slate-900">✏️ Edit Portfolio</h2>
+            <button @click="cancelEditing" class="text-xs text-slate-400 hover:text-slate-600 bg-slate-50 hover:bg-slate-100 px-2 py-1 rounded-md transition-colors">Cancel</button>
+          </div>
+
+          <form @submit.prevent="updatePortfolio" class="space-y-3">
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Full Name *</label>
+              <input type="text" required class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="e.g. Jane Doe" v-model="editingProfile.name" />
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Headline *</label>
+              <input type="text" required class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="e.g. Lead Blockchain Dev" v-model="editingProfile.title" />
+            </div>
+
+            <div>
+              <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Bio</label>
+              <textarea rows="2" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none" placeholder="Tell clients what value you bring..." v-model="editingProfile.bio"></textarea>
+            </div>
+
+            <div class="border-t border-slate-100 pt-2 space-y-2">
+              <span class="block text-[10px] font-bold text-indigo-500 uppercase tracking-wider">Contact Methods (Optional)</span>
+              
+              <input type="email" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="✉️ Email Address" v-model="editingProfile.email" />
+              <input type="text" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="💬 WhatsApp Number" v-model="editingProfile.whatsapp" />
+              <input type="text" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="📸 Instagram Username" v-model="editingProfile.instagram" />
+            </div>
+
+            <div class="flex gap-2">
+              <button type="submit" :disabled="isSubmitting" class="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs transition-colors disabled:opacity-50">
+                {{ isSubmitting ? 'Saving...' : '💾 Save Changes' }}
+              </button>
+              <button type="button" @click="cancelEditing" class="py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-colors">
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Add Portfolio Form -->
         <div v-else class="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 space-y-4 sticky top-24">
           <div>
             <h2 class="text-base font-black text-slate-900">Add Your Portfolio</h2>
@@ -188,7 +233,7 @@
               <span class="block text-[10px] font-bold text-indigo-500 uppercase tracking-wider">Contact Methods (Optional)</span>
               
               <input type="email" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="✉️ Email Address" v-model="form.email" />
-              <input type="text" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="💬 WhatsApp Number (include country code)" v-model="form.whatsapp" />
+              <input type="text" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="💬 WhatsApp Number" v-model="form.whatsapp" />
               <input type="text" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" placeholder="📸 Instagram Username" v-model="form.instagram" />
             </div>
 
@@ -203,13 +248,13 @@
   </div>
 
   <script>
-    const { createApp, ref, computed, onMounted } = Vue;
+    const { createApp, ref, computed, onMounted, nextTick } = Vue;
 
     // ============================================================
-    // YOUR JSONBIN CREDENTIALS (Already Added)
+    // YOUR NEW JSONBIN CREDENTIALS
     // ============================================================
-    const BIN_ID = '6a4e07a1da38895dfe3f2c12';
-    const API_KEY = '$2a$10$9H5oG80cnlBePFC2af5G5edtOsIn6o2YDVdFws9VDqImy8Vnuf4PO';
+    const BIN_ID = '6a4e1171da38895dfe3f5885';     // ← NEW BIN ID
+    const API_KEY = '$2a$10$9H5oG80cnlBePFC2af5G5edtOsIn6o2YDVdFws9VDqImy8Vnuf4PO';  // ← Same API Key
 
     const API_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
     // ============================================================
@@ -221,7 +266,11 @@
         const chatInput = ref('');
         const isLoading = ref(true);
         const isSubmitting = ref(false);
+        const isSendingMessage = ref(false);
         const errorMessage = ref('');
+        const chatContainer = ref(null);
+        const isEditing = ref(false);
+        const editingProfile = ref(null);
 
         const profiles = ref([]);
         const messages = ref([]);
@@ -237,13 +286,13 @@
           );
         });
 
-        // ---------- LOAD PROFILES FROM JSONBIN ----------
-        async function loadProfiles() {
+        // ---------- LOAD DATA FROM JSONBIN ----------
+        async function loadAllData() {
           isLoading.value = true;
           errorMessage.value = '';
           
           try {
-            console.log('📡 Fetching from:', API_URL);
+            console.log('📡 Fetching from new bin:', BIN_ID);
             
             const response = await fetch(`${API_URL}/latest`, {
               headers: { 
@@ -252,44 +301,52 @@
               }
             });
             
-            console.log('📡 Response status:', response.status);
-            
             if (!response.ok) {
               const errorText = await response.text();
-              console.error('❌ Error response:', errorText);
               throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             
             const data = await response.json();
-            console.log('✅ Data received:', data);
+            console.log('✅ Data loaded from new bin:', data);
             
-            // Handle different response formats
-            if (data.record && Array.isArray(data.record)) {
-              profiles.value = data.record;
+            if (data.record) {
+              if (data.record.profiles) {
+                profiles.value = data.record.profiles || [];
+                messages.value = data.record.messages || [];
+              } else {
+                profiles.value = data.record || [];
+                messages.value = [];
+              }
             } else if (Array.isArray(data)) {
               profiles.value = data;
+              messages.value = [];
             } else {
               profiles.value = [];
-              console.warn('⚠️ Unexpected data format:', data);
+              messages.value = [];
             }
             
-            if (profiles.value.length === 0) {
-              console.log('ℹ️ No profiles found. Add some!');
-            }
+            if (!Array.isArray(profiles.value)) profiles.value = [];
+            if (!Array.isArray(messages.value)) messages.value = [];
             
           } catch (error) {
-            console.error('❌ Error loading profiles:', error);
+            console.error('❌ Error loading data:', error);
             errorMessage.value = `Failed to load: ${error.message}`;
             profiles.value = [];
+            messages.value = [];
           } finally {
             isLoading.value = false;
           }
         }
 
-        // ---------- SAVE PROFILES TO JSONBIN ----------
-        async function saveProfiles() {
+        // ---------- SAVE DATA TO JSONBIN ----------
+        async function saveAllData() {
           try {
-            console.log('💾 Saving profiles:', profiles.value);
+            const dataToSave = {
+              profiles: profiles.value,
+              messages: messages.value
+            };
+            
+            console.log('💾 Saving to new bin:', dataToSave);
             
             const response = await fetch(API_URL, {
               method: 'PUT',
@@ -297,18 +354,17 @@
                 'Content-Type': 'application/json',
                 'X-Master-Key': API_KEY
               },
-              body: JSON.stringify(profiles.value)
+              body: JSON.stringify(dataToSave)
             });
             
             if (!response.ok) {
               const errorText = await response.text();
-              console.error('❌ Save error:', errorText);
               throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
             
-            console.log('✅ Profiles saved successfully');
+            console.log('✅ Data saved to new bin successfully');
           } catch (error) {
-            console.error('❌ Error saving profiles:', error);
+            console.error('❌ Error saving data:', error);
             throw error;
           }
         }
@@ -321,7 +377,6 @@
           }
 
           isSubmitting.value = true;
-          errorMessage.value = '';
 
           const newProfile = {
             id: Date.now().toString().slice(-6),
@@ -336,14 +391,12 @@
 
           try {
             profiles.value.unshift(newProfile);
-            await saveProfiles();
+            await saveAllData();
             
             form.value = { name: '', title: '', bio: '', email: '', whatsapp: '', instagram: '' };
             alert('✅ Your profile has been published to the global directory!');
           } catch (error) {
-            // Rollback if save fails
             profiles.value = profiles.value.filter(p => p.id !== newProfile.id);
-            errorMessage.value = `Failed to save: ${error.message}`;
             alert('❌ Failed to publish profile. Please try again.');
           } finally {
             isSubmitting.value = false;
@@ -352,42 +405,117 @@
 
         // ---------- DELETE PORTFOLIO ----------
         const deletePortfolio = async (id) => {
-          if (!confirm('Are you sure you want to permanently delete this portfolio from the live feed?')) return;
+          if (!confirm('Are you sure you want to permanently delete this portfolio?')) return;
 
           try {
+            messages.value = messages.value.filter(m => m.profileId !== id);
             profiles.value = profiles.value.filter(p => p.id !== id);
-            await saveProfiles();
+            await saveAllData();
             selectedProfile.value = null;
-            alert('✅ Profile deleted successfully!');
+            alert('✅ Profile and its messages deleted successfully!');
           } catch (error) {
-            await loadProfiles();
+            await loadAllData();
             alert('❌ Failed to delete profile. Please try again.');
           }
         };
 
-        // ---------- CHAT FUNCTIONS ----------
-        const getMessages = (profileId) => {
-          return messages.value.filter(m => m.profileId === profileId);
+        // ---------- START EDITING ----------
+        const startEditing = (profile) => {
+          editingProfile.value = { ...profile };
+          isEditing.value = true;
         };
 
-        const sendMessage = (profileId) => {
+        // ---------- CANCEL EDITING ----------
+        const cancelEditing = () => {
+          isEditing.value = false;
+          editingProfile.value = null;
+        };
+
+        // ---------- UPDATE PORTFOLIO ----------
+        const updatePortfolio = async () => {
+          if (!editingProfile.value.name.trim() || !editingProfile.value.title.trim()) {
+            alert('Please fill in Name and Headline fields.');
+            return;
+          }
+
+          isSubmitting.value = true;
+
+          try {
+            const index = profiles.value.findIndex(p => p.id === editingProfile.value.id);
+            if (index !== -1) {
+              profiles.value[index] = { ...editingProfile.value };
+              await saveAllData();
+              selectedProfile.value = { ...editingProfile.value };
+              alert('✅ Profile updated successfully!');
+              isEditing.value = false;
+              editingProfile.value = null;
+            }
+          } catch (error) {
+            alert('❌ Failed to update profile. Please try again.');
+          } finally {
+            isSubmitting.value = false;
+          }
+        };
+
+        // ---------- GET MESSAGES ----------
+        const getMessages = (profileId) => {
+          return messages.value
+            .filter(m => m.profileId === profileId)
+            .sort((a, b) => a.timestamp - b.timestamp);
+        };
+
+        // ---------- SEND MESSAGE ----------
+        const sendMessage = async (profileId) => {
           if (!chatInput.value.trim()) return;
+          if (isSendingMessage.value) return;
+
+          isSendingMessage.value = true;
 
           const now = new Date();
-          const timestamp = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          const timestamp = now.getTime();
+          const timeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-          messages.value.push({
+          const newMessage = {
             profileId: profileId,
             text: chatInput.value.trim(),
-            time: timestamp
-          });
+            time: timeString,
+            timestamp: timestamp,
+            sender: 'Anonymous Visitor'
+          };
 
-          chatInput.value = '';
+          try {
+            messages.value.push(newMessage);
+            await saveAllData();
+            chatInput.value = '';
+            
+            await nextTick();
+            if (chatContainer.value) {
+              chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+            }
+          } catch (error) {
+            messages.value = messages.value.filter(m => m.timestamp !== timestamp);
+            alert('❌ Failed to send message. Please try again.');
+          } finally {
+            isSendingMessage.value = false;
+          }
+        };
+
+        // ---------- AUTO-REFRESH ----------
+        let refreshInterval = null;
+
+        const startAutoRefresh = () => {
+          if (refreshInterval) clearInterval(refreshInterval);
+          refreshInterval = setInterval(() => {
+            if (selectedProfile.value) {
+              loadAllData();
+            }
+          }, 10000);
         };
 
         // ---------- LOAD ON MOUNT ----------
         onMounted(() => {
-          loadProfiles();
+          loadAllData();
+          startAutoRefresh();
         });
 
         return {
@@ -399,10 +527,17 @@
           chatInput,
           isLoading,
           isSubmitting,
+          isSendingMessage,
           errorMessage,
-          loadProfiles,
+          chatContainer,
+          isEditing,
+          editingProfile,
+          loadAllData,
           handleCreatePortfolio,
           deletePortfolio,
+          startEditing,
+          cancelEditing,
+          updatePortfolio,
           getMessages,
           sendMessage
         };
